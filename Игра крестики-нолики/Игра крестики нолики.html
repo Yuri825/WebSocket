@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Крестики-нолики</title>
+	<meta charset="utf-8">
+	<style type="text/css">
+		#wrapper {
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 95vh;
+		}
+
+		.blue {
+			background-color: blue;
+			color: orange;
+		}
+
+		.orange {
+			background-color: orange;
+			color: blue;
+		}
+
+		#field td 
+		{
+			width: 150px;
+			height: 150px;
+			border: 3px solid black;
+			text-align: center;
+			font-weight: bold;
+			font-size: 70px;
+			cursor: pointer;
+		}
+		.hide
+		{
+			display: none;
+		}
+		.dis 
+		{
+			pointer-events: none;
+		}
+
+	</style>
+</head>
+<body>
+	<div id="wrapper">
+	<table id="field">
+		<tr>
+			<td></td>
+			<td></td>
+			<td></td>
+		</tr>
+		<tr>
+			<td></td>
+			<td></td>
+			<td></td>
+		</tr>
+		<tr>
+			<td></td>
+			<td></td>
+			<td></td>
+		</tr>
+	</table>
+	<img src="images/draw0.jpg" id="img0" class="hide">
+	<img src="images/draw1.jpg" id="img1" class="hide">
+	<img src="images/draw2.jpg" id="img2" class="hide">
+</div>
+
+</body>
+<script type="text/javascript">
+	let cells = document.querySelectorAll('#field td');
+	let img0 = document.getElementById('img0');
+	let img1 = document.getElementById('img1');
+	let img2 = document.getElementById('img2');
+	let field = document.getElementById('field');
+
+
+	for(let i = 0; i < cells.length; i++) 
+	{
+		cells[i].setAttribute('numberCell', i);
+	}
+
+	let socket = new WebSocket("ws://localhost:8888"); // создаем объект для открытия соединения
+
+	let i = 0;
+
+	socket.onopen = function(event) // событие 'соединение установлено'
+	{ 
+		for(cell of cells) 
+		{
+			
+			cell.addEventListener('click', function step() 
+			{
+
+				if(i % 2 == 0) 
+				{
+					this.innerHTML = 'X';
+					this.classList.add('blue');
+				} 
+				else 
+				{
+					this.innerHTML = '0';
+					this.classList.add('orange');
+				}
+
+				this.removeEventListener('click', step);
+
+					this.classList.add('disAlvays');
+
+					for(cell of cells)
+					{
+						cell.classList.add('dis'); // блокируем ввод в ячейки
+					}
+					
+
+				if(isVictory(cells)) 
+				{
+
+					if(this.innerHTML == 'X') 
+					{
+						img1.classList.toggle('hide');
+						field.classList.toggle('hide');
+
+						this.setAttribute('win', 'win1');
+					} 
+					else if(this.innerHTML == '0') 
+					{
+						img2.classList.toggle('hide');
+						field.classList.toggle('hide');
+						this.setAttribute('win', 'win2');
+					}
+				}
+
+				if(i == 8) 
+				{
+					img0.classList.toggle('hide');
+					field.classList.toggle('hide');
+					this.setAttribute('win', 'win0');
+				}
+
+				i++;
+
+					let thisCell = this.getAttribute('numberCell'); // получаем атрибут "numberCell" нажатой ячейки
+					
+			
+						// создаем объект с данными нажатой ячейки
+						let objForSend = {};
+
+						let classNames = this.classList; // создаем объект с классами
+					
+
+						if(this.hasAttribute('win')) 
+						{
+							objForSend = 
+							{
+								numCell: thisCell, 
+								value: this.innerHTML, 
+								class: classNames, 
+								win: this.getAttribute('win'),
+							
+							}; 
+						} 
+						else if(!this.hasAttribute('win')) 
+						{
+							objForSend = 
+							{
+								numCell: thisCell, 
+								value: this.innerHTML, 
+								class: classNames
+							}; 
+						}
+					
+					let messageInJSON = JSON.stringify(objForSend); // сериализуем в JSON данные ячейки
+
+					socket.send(messageInJSON); // Отправляем данные на сервер
+
+					console.log('Отправлено на сервер: ' + messageInJSON);
+			});
+			
+		}
+	}
+
+			socket.onmessage = function(event) 
+			{
+				let messageFromJSON = JSON.parse(event.data); // получаем сообщение с сервера
+
+
+				// Пришедшие данные с сервера:
+				let valCell = messageFromJSON.value; // значение
+				let valNumCell = messageFromJSON.numCell; // номер ячейки
+				let valClassCell = messageFromJSON.class; // объект с классами
+
+				let keys = Object.keys(valClassCell); // массив ключей объекта с классами
+					
+
+				for(let j = 0; j < cells.length; j++) 
+				{
+
+					if(valNumCell == cells[j].getAttribute('numberCell')) 
+					{
+						cells[j].innerHTML = valCell;
+
+						for(let i = 0; i < keys.length; i++)
+						{
+							cells[j].classList.add(valClassCell[i]); // записываем классы
+						}
+					}
+
+				}
+
+				if(messageFromJSON.win) // сообщение о победителе во втором окне
+				{
+					let valWinCell = messageFromJSON.win;
+
+					if(valWinCell == 'win1') 
+					{
+						img1.classList.toggle('hide');
+						field.classList.toggle('hide');
+					} 
+					else if (valWinCell == 'win2') 
+					{
+						img2.classList.toggle('hide');
+						field.classList.toggle('hide');
+					} 
+					else if (valWinCell == 'win0') 
+					{
+						img0.classList.toggle('hide');
+						field.classList.toggle('hide');
+					}
+				}
+					
+				i++;
+
+				for(cell of cells)
+				{
+					if(cell.classList.contains('disAlvays') == false) // если ячейка не использована, снимаем ограничения на ввод
+					{
+						cell.classList.remove('dis');
+					}					
+				}
+			}
+
+					socket.onclose = function(event) 
+					{
+						if(event.wasClean) 
+						{
+							alert(`[close] Соединение закрыто чисто, код=${event.code} причина=${event.reason}`);
+						} 
+						else 
+						{
+							alert('[close] Соединение прервано');
+						}
+					};
+
+
+		socket.onerror = function(error) 
+		{
+			alert(`[error] ${error.message}`);
+		};
+
+
+    // Функции: ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	
+function isVictory(cells) 
+{
+	let combs = 
+	[
+		[0, 1, 2],
+		[3, 4, 5],
+		[6, 7, 8],
+		[0, 3, 6],
+		[1, 4, 7],
+		[2, 5, 8],
+		[0, 4, 8],
+		[2, 4, 6],
+	];
+
+	for (let comb of combs) 
+	{
+		if (
+			cells[comb[0]].innerHTML == cells[comb[1]].innerHTML &&
+			cells[comb[1]].innerHTML == cells[comb[2]].innerHTML &&
+			cells[comb[0]].innerHTML != ''
+		) 
+		{
+			return true;
+		}
+	}
+	
+	return false;
+}
+		
+</script>
+</html>
